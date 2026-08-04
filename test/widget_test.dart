@@ -6,8 +6,9 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:todolist_app/main.dart' show MyApp;
 
-import 'package:todolist_app/app.dart';
+
 
 void main() {
   testWidgets('app shows welcome text', (tester) async {

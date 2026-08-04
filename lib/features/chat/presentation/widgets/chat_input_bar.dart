@@ -1,5 +1,6 @@
 // lib/features/chat/presentation/widgets/chat_input_bar.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../speech/data/datasources/speech_to_text_datasource.dart';
 import '../../../../core/widgets/aura_orb.dart';
 
@@ -12,9 +13,11 @@ class ChatInputBar extends StatefulWidget {
 }
 
 class _ChatInputBarState extends State<ChatInputBar> {
-  final _controller = TextEditingController();
-  final _speechDatasource = SpeechToTextDatasource();
+   final _controller = TextEditingController();
   bool _isListening = false;
+
+  SpeechToTextDatasource get _speechDatasource =>
+      context.read<SpeechToTextDatasource>();
 
   void _submit() {
     final text = _controller.text;

@@ -26,6 +26,7 @@ class ChatProvider extends ChangeNotifier {
 
   final List<ChatMessage> messages = [];
   bool isLoading = false;
+  Future<void> checkMorningGreeting()=> _checkMorningGreeting();
    Future<void> _checkMorningGreeting() async {
     final shouldShow = await dailyGreetingService.shouldShowMorningGreeting();
     if (!shouldShow) return;

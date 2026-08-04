@@ -8,6 +8,7 @@ import 'package:todolist_app/core/services/notification_service.dart';
 
 import 'package:todolist_app/features/ai_engine/data/datasources/gemini_intent_datasource.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/classify_intent.dart';
+import 'package:todolist_app/features/speech/data/datasources/speech_to_text_datasource.dart';
 import '../features/tasks/domain/usecases/create_recurring_tasks.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/generate_morning_summary.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/route_message.dart';
@@ -26,12 +27,14 @@ import '../features/tasks/domain/usecases/create_task.dart';
 import '../features/tasks/domain/usecases/complete_task.dart';
 import '../features/tasks/domain/usecases/watch_today_task.dart';
 import '../core/providers/theme_provider.dart';
+
 List<SingleChildWidget> get appProviders {
   final authService = AuthService();
   final datasource = TaskFirestoreDatasource(FirebaseFirestore.instance);
   final taskRepository = TaskRepositoryImpl(datasource, authService);
   final geminiDatasource = GeminiIntentDatasource();
   final ttsDatasource = TextToSpeechDatasource();
+  final sttDatasource = SpeechToTextDatasource();
   final aggregationDatasource = AnalyticsAggregationDatasource();
   final insightDatasource = InsightGenerationDatasource();
   final notificationService = NotificationService();
@@ -47,6 +50,7 @@ List<SingleChildWidget> get appProviders {
     Provider<CreateTask>(
       create: (_) => CreateTask(taskRepository, notificationService),
     ),
+    Provider<SpeechToTextDatasource>.value(value: sttDatasource),
     Provider<CompleteTask>(
       create: (_) => CompleteTask(taskRepository, notificationService),
     ),
