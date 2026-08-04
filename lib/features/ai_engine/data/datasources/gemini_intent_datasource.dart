@@ -1,0 +1,158 @@
+// lib/features/ai_engine/data/datasources/gemini_intent_datasource.dart
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../../../core/config/app_config.dart';
+
+class GeminiIntentDatasource {
+  static const _endpoint =
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+  final _systemPrompt = '''
+Bạn là bộ phân loại ý định (intent classifier) cho app quản lý công việc.
+Phân tích câu người dùng nhập, trả về CHÍNH XÁC 1 JSON object theo schema sau, KHÔNG thêm text hay markdown nào khác:
+
+{
+  "intent": "createTask | updateTask | deleteTask | completeTask | queryTasks | performanceReport | chitchat | unknown",
+  "confidence": 0.0 đến 1.0,
+  "message": "câu trả lời tự nhiên bằng tiếng Việt cho người dùng",
+  "entities": {
+    "title": "tên task nếu có, null nếu không",
+    "dueDate": "ISO8601 datetime nếu có, null nếu không",
+    "priority": "low|medium|high, null nếu không đề cập",
+    "taskIdHint": "từ khóa để tìm task nếu là update/delete/complete, null nếu không"
+  },
+  "requires_confirmation": true nếu là deleteTask, false cho các trường hợp khác
+}
+
+Nếu câu người dùng không rõ ràng, mơ hồ, hoặc không liên quan đến quản lý task, trả về intent "unknown" và viết "message" hỏi lại người dùng để làm rõ ý.
+
+Ngày giờ hiện tại: ${DateTime.now().toIso8601String()}
+''';
+
+  Future<Map<String, dynamic>> classifyIntent(String userMessage, {String? contextHint}) async {
+    return _callWithRetry(userMessage, contextHint: contextHint, retriesLeft: 1);
+  }
+// gemini_intent_datasource.dart — thêm hàm mới vào class GeminiIntentDatasource
+Future<Map<String, dynamic>> extractSlotInfo(String text) async {
+  final prompt = '''
+Trích xuất thông tin thời gian (dueDate) và độ ưu tiên (priority) từ câu trả lời ngắn của người dùng, trong ngữ cảnh AI vừa hỏi thêm thông tin cho 1 task.
+Câu trả lời: "$text"
+Ngày giờ hiện tại: ${DateTime.now().toIso8601String()}
+
+Trả về CHÍNH XÁC JSON theo schema sau, không thêm markdown hay giải thích:
+{"dueDate": "ISO8601 datetime nếu câu có đề cập thời gian/ngày giờ, null nếu không", "priority": "low|medium|high nếu có đề cập độ ưu tiên, null nếu không"}
+''';
+
+  final response = await http
+      .post(
+        Uri.parse('$_endpoint?key=${AppConfig.geminiApiKey}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [
+            {'role': 'user', 'parts': [{'text': prompt}]}
+          ],
+          'generationConfig': {
+            'response_mime_type': 'application/json',
+            'temperature': 0.1,
+          }
+        }),
+      )
+      .timeout(const Duration(seconds: 15));
+
+  if (response.statusCode != 200) {
+    throw GeminiException('api_error', 'Lỗi API (${response.statusCode}).');
+  }
+
+  final data = jsonDecode(response.body);
+  final rawText = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
+  if (rawText == null) {
+    throw GeminiException('empty_response', 'AI không trả về kết quả.');
+  }
+  return jsonDecode(rawText) as Map<String, dynamic>;
+}
+  Future<Map<String, dynamic>> _callWithRetry(
+    String userMessage, {
+    String? contextHint,
+    required int retriesLeft,
+  }) async {
+    try {
+      final contextSection = contextHint != null
+          ? '\n\nNgữ cảnh: Task được nhắc đến gần đây nhất là "$contextHint". Nếu người dùng dùng đại từ như "nó", "task đó", "cái này" mà không nêu rõ tên, hãy hiểu là đang nhắc đến task này và điền vào "taskIdHint".'
+          : '';
+
+      final response = await http
+          .post(
+            Uri.parse('$_endpoint?key=${AppConfig.geminiApiKey}'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'contents': [
+                {
+                  'role': 'user',
+                  'parts': [
+                    {'text': '$_systemPrompt$contextSection\n\nCâu người dùng: "$userMessage"'}
+                  ]
+                }
+              ],
+              'generationConfig': {
+                'response_mime_type': 'application/json',
+                'temperature': 0.2,
+              }
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 429) {
+        throw GeminiException('rate_limit', 'Đang có quá nhiều yêu cầu, thử lại sau ít phút.');
+      }
+      if (response.statusCode >= 500) {
+        throw GeminiException('server_error', 'Gemini đang gặp sự cố, thử lại sau.');
+      }
+      if (response.statusCode != 200) {
+        throw GeminiException('api_error', 'Lỗi API (${response.statusCode}).');
+      }
+
+      final data = jsonDecode(response.body);
+      final rawText = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
+
+      if (rawText == null) {
+        throw GeminiException('empty_response', 'AI không trả về kết quả.');
+      }
+
+      final parsed = jsonDecode(rawText);
+      _validateSchema(parsed);
+      return parsed as Map<String, dynamic>;
+    } on TimeoutException {
+      if (retriesLeft > 0) {
+        return _callWithRetry(userMessage, contextHint: contextHint, retriesLeft: retriesLeft - 1);
+      }
+      throw GeminiException('timeout', 'Kết nối quá lâu, vui lòng thử lại.');
+    } on FormatException {
+      throw GeminiException('invalid_json', 'AI trả về định dạng không hợp lệ.');
+    } catch (e) {
+      if (e is GeminiException) rethrow;
+      if (retriesLeft > 0) {
+        return _callWithRetry(userMessage, contextHint: contextHint, retriesLeft: retriesLeft - 1);
+      }
+      throw GeminiException('network_error', 'Không thể kết nối tới AI, kiểm tra mạng.');
+    }
+  }
+
+  void _validateSchema(dynamic parsed) {
+    if (parsed is! Map<String, dynamic>) {
+      throw const FormatException('Response is not a JSON object');
+    }
+    if (!parsed.containsKey('intent') || !parsed.containsKey('message')) {
+      throw const FormatException('Missing required fields');
+    }
+  }
+}
+
+class GeminiException implements Exception {
+  final String code;
+  final String userMessage;
+  GeminiException(this.code, this.userMessage);
+
+  @override
+  String toString() => userMessage;
+}

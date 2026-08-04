@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "935726813994",
+    "project_id": "smartaiapp-3660c",
+    "storage_bucket": "smartaiapp-3660c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:935726813994:android:385250d3e2ba2a5babc453",
+        "android_client_info": {
+          "package_name": "com.example.todolist_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "935726813994-7uv0sm4s32ebrrn5tpbbid7ihdascn5t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDF_BHD6bQd3dAzAhIwN3wmrjjBNHwEjlM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "935726813994-7uv0sm4s32ebrrn5tpbbid7ihdascn5t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
