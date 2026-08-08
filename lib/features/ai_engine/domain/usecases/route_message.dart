@@ -105,11 +105,15 @@ class RouteMessage {
 switch (result.intent) {
 
       case IntentType.createTask:
+        return _handleCreateTask(result);
       case IntentType.updateTask:
+        return _handleUpdateTask(result, userMessage);
       case IntentType.deleteTask:
+        return _handleDeleteTaskRequest(result, userMessage);
       case IntentType.completeTask:
+        return _handleCompleteTask(result, userMessage);
       case IntentType.batchAction:
-        return _redirectToManualUI();
+        return _handleBatchAction(result);
 
       case IntentType.queryTasks:
         return _handleQueryTasks(result);
@@ -650,14 +654,6 @@ Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
   }
 }
 
-ChatResponse _redirectToManualUI() {
-    return ChatResponse(
-      message: 'Để tạo, sửa, xóa hoặc đánh dấu hoàn thành task, bạn '
-          'vào tab "Công việc" nhé — bấm nút + để thêm mới, hoặc bấm '
-          'trực tiếp vào task để sửa/xóa/hoàn thành. Mình ở đây để trả lời '
-          'các câu hỏi như "hôm nay tôi có việc gì" hoặc xem báo cáo hiệu suất 😊',
-    );
-  }
 class _DateRange {
   final DateTime start;
   final DateTime end; // không bao gồm (exclusive)
