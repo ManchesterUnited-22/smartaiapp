@@ -9,6 +9,7 @@ import 'package:todolist_app/core/services/notification_service.dart';
 import 'package:todolist_app/features/ai_engine/data/datasources/gemini_intent_datasource.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/classify_intent.dart';
 import 'package:todolist_app/features/speech/data/datasources/speech_to_text_datasource.dart';
+import 'package:todolist_app/features/tasks/domain/usecases/update_task.dart';
 import '../features/tasks/domain/usecases/create_recurring_tasks.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/generate_morning_summary.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/route_message.dart';
@@ -56,6 +57,9 @@ List<SingleChildWidget> get appProviders {
     ),
     Provider<DeleteTask>(
       create: (_) => DeleteTask(taskRepository, notificationService),
+    ),
+    Provider<UpdateTask>(
+      create: (_) => UpdateTask(taskRepository, notificationService),
     ),
     Provider<WatchTodayTask>(
       create: (_) => WatchTodayTask(taskRepository),

@@ -43,6 +43,11 @@ class CreateTask {
         title: createdTask.title,
         reminderTime: reminderTime,
       );
+      await notificationService.scheduleOverdueAlert(
+        taskId: task.id,
+        title: title,
+        dueDate: dueDate,
+      );
     }
 
     return createdTask;

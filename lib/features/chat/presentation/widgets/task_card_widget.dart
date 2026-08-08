@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:todolist_app/features/tasks/domain/usecases/update_task.dart';
 import '../../../tasks/domain/entities/task.dart';
 import '../../../tasks/domain/usecases/complete_task.dart';
 import '../../../tasks/domain/usecases/delete_task.dart';
@@ -132,10 +133,12 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
             _priority = newPriority;
           });
           try {
-            await context.read<TaskRepository>().updateTask(widget.task.id, {
-              'dueDate': Timestamp.fromDate(newDueDate),
-              'priority': newPriority.name,
-            });
+            await context.read<UpdateTask>()(
+      taskId: widget.task.id,
+      title: widget.task.title,
+      newDueDate: newDueDate,
+      newPriority: newPriority,
+    );
           } catch (_) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(

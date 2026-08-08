@@ -31,15 +31,28 @@ class TaskFirestoreDatasource {
   }
 
   Stream<List<TaskModel>> watchTasks(String userId, {TaskStatus? status}) {
-    Query query = _tasksRef(userId);
-    if (status != null) {
-      query = query.where('status', isEqualTo: status.name);
-    }
-    query = query.orderBy('dueDate');
-    return query.snapshots().map(
-          (snap) => snap.docs.map((d) => TaskModel.fromFirestore(d)).toList(),
-        );
+  Query query = _tasksRef(userId);
+  if (status != null) {
+    query = query.where('status', isEqualTo: status.name);
   }
+  query = query.orderBy('dueDate');
+  return query.snapshots().map((snap) {
+    final tasks = <TaskModel>[];
+    for (final d in snap.docs) {
+      try {
+        tasks.add(TaskModel.fromFirestore(d));
+      } catch (e) {
+        // Không để 1 document lỗi làm sập cả danh sách — bỏ qua document đó
+        // và in rõ ID + dữ liệu thô ra console để biết chính xác chỗ nào sai.
+        // ignore: avoid_print
+        print('⚠️ LỖI PARSE TASK [${d.id}]: $e');
+        // ignore: avoid_print
+        print('   Dữ liệu thô: ${d.data()}');
+      }
+    }
+    return tasks;
+  });
+}
 
   Future<List<TaskModel>> queryTasksByDateRange(
     String userId,
@@ -51,6 +64,15 @@ class TaskFirestoreDatasource {
         .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(to))
         .orderBy('dueDate')
         .get();
-    return snap.docs.map((d) => TaskModel.fromFirestore(d)).toList();
+    final tasks = <TaskModel>[];
+    for (final d in snap.docs){
+      try {
+        tasks.add(TaskModel.fromFirestore(d));
+      } catch (e) {
+        print('⚠️ LỖI PARSE TASK [${d.id}]: $e');
+        
+      }
+    }
+    return tasks;
   }
 }

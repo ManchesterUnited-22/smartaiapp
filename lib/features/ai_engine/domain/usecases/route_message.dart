@@ -102,27 +102,26 @@ class RouteMessage {
     }
 
     final result = await classifyIntent(userMessage, contextHint: _context.contextHint);
+switch (result.intent) {
 
-    switch (result.intent) {
       case IntentType.createTask:
-        return _handleCreateTask(result);
-      case IntentType.completeTask:
-        return _handleCompleteTask(result, userMessage);
+      case IntentType.updateTask:
       case IntentType.deleteTask:
-        return _handleDeleteTaskRequest(result, userMessage);
+      case IntentType.completeTask:
+      case IntentType.batchAction:
+        return _redirectToManualUI();
+
       case IntentType.queryTasks:
         return _handleQueryTasks(result);
       case IntentType.performanceReport:
         return _handlePerformanceReport(result);
-      case IntentType.updateTask:
-        return _handleUpdateTask(result, userMessage);
-      case IntentType.batchAction:
-        return _handleBatchAction(result);
+
       case IntentType.chitchat:
       case IntentType.unknown:
       default:
         return ChatResponse(message: result.message);
     }
+    
   }
 
   Future<ChatResponse?> _tryResolvePendingClarification(String userMessage) async {
@@ -407,20 +406,72 @@ class RouteMessage {
         );
     }
   }
+Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
+    final scope = result.entities?['queryScope'] as String? ?? 'date_range';
+    final expr = result.entities?['timeExpression'] as String?;
+    final specificDate = result.entities?['specificDate'] as String?;
 
-  Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
+    // ignore: avoid_print
+    print('🔎 queryTasks entities: ${result.entities}');
 
     try {
-      final tasks = await taskRepository.queryTasksByDateRange(startOfDay, endOfDay);
-      if (tasks.isEmpty) {
-        return ChatResponse(message: 'Hôm nay bạn chưa có task nào cả 🎉');
+      List<Task> tasks;
+      String timeLabel;
+
+      if (scope == 'overdue') {
+        final allPast = await taskRepository.queryTasksByDateRange(DateTime(2000), DateTime.now());
+        tasks = allPast.where((t) => t.status != TaskStatus.completed).toList();
+        timeLabel = 'đang bị trễ hạn';
+      } else if (scope == 'all') {
+        tasks = await taskRepository.queryTasksByDateRange(DateTime(2000), DateTime(2100));
+        timeLabel = 'trong toàn bộ danh sách';
+      } else {
+        final range = _resolveTimeExpression(expr, specificDate);
+        tasks = await taskRepository.queryTasksByDateRange(range.start, range.end);
+        timeLabel = _timeLabelText(expr, range);
       }
-      return ChatResponse(message: 'Bạn có ${tasks.length} task hôm nay:', taskList: tasks);
-    } catch (e) {
+
+      // Câu trả lời soạn HOÀN TOÀN từ dữ liệu thật vừa truy vấn được —
+      // không dùng result.message nữa, vì AI viết câu đó TRƯỚC khi biết
+      // kết quả thật, nên luôn rõ ràng có/không, không còn bị "lửng lơ".
+      if (tasks.isEmpty) {
+        return ChatResponse(message: 'Không có task nào $timeLabel cả.');
+      }
+      return ChatResponse(message: 'Bạn có ${tasks.length} task $timeLabel:', taskList: tasks);
+    } catch (e, stackTrace) {
+       // ignore: avoid_print
+      print('❌ LỖI TRUY VẤN TASK: $e');
+      // ignore: avoid_print
+      print('❌ Loại lỗi: ${e.runtimeType}');
+      // ignore: avoid_print
+      print(stackTrace);
       return ChatResponse(message: NetworkExceptionHandler.getFriendlyMessage(e));
+    }
+  }
+
+  String _timeLabelText(String? expr, _DateRange range) {
+    switch (expr) {
+      case 'tomorrow':
+        return 'vào ngày mai';
+      case 'yesterday':
+        return 'vào hôm qua';
+      case 'this_week':
+        return 'trong tuần này';
+      case 'next_week':
+        return 'trong tuần sau';
+      case 'last_week':
+        return 'trong tuần trước';
+      case 'this_month':
+        return 'trong tháng này';
+      case 'next_month':
+        return 'trong tháng sau';
+      case 'last_month':
+        return 'trong tháng trước';
+      case 'specific_date':
+        return 'vào ngày ${range.start.day}/${range.start.month}/${range.start.year}';
+      case 'today':
+      default:
+        return 'hôm nay';
     }
   }
 
@@ -596,5 +647,74 @@ class RouteMessage {
     } catch (e) {
       return ChatResponse(message: NetworkExceptionHandler.getFriendlyMessage(e));
     }
+  }
+}
+
+ChatResponse _redirectToManualUI() {
+    return ChatResponse(
+      message: 'Để tạo, sửa, xóa hoặc đánh dấu hoàn thành task, bạn '
+          'vào tab "Công việc" nhé — bấm nút + để thêm mới, hoặc bấm '
+          'trực tiếp vào task để sửa/xóa/hoàn thành. Mình ở đây để trả lời '
+          'các câu hỏi như "hôm nay tôi có việc gì" hoặc xem báo cáo hiệu suất 😊',
+    );
+  }
+class _DateRange {
+  final DateTime start;
+  final DateTime end; // không bao gồm (exclusive)
+  const _DateRange(this.start, this.end);
+}
+
+/// Tính chính xác khoảng ngày-giờ từ nhãn chuẩn hoá do AI phân loại —
+/// làm bằng code thường (Dart), KHÔNG nhờ AI tính toán lịch, để đảm bảo
+/// luôn đúng 100% (đầu tuần luôn là thứ 2, đầu tháng luôn là ngày 1...).
+_DateRange _resolveTimeExpression(String? expr, String? specificDateRaw) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final normalized = expr?.toLowerCase().trim();
+  switch (normalized) {
+    case 'tomorrow':
+      final d = today.add(const Duration(days: 1));
+      return _DateRange(d, d.add(const Duration(days: 1)));
+
+    case 'yesterday':
+      final d = today.subtract(const Duration(days: 1));
+      return _DateRange(d, today);
+
+    case 'this_week':
+      final monday = today.subtract(Duration(days: today.weekday - 1));
+      return _DateRange(monday, monday.add(const Duration(days: 7)));
+
+    case 'next_week':
+      final monday = today.subtract(Duration(days: today.weekday - 1)).add(const Duration(days: 7));
+      return _DateRange(monday, monday.add(const Duration(days: 7)));
+
+    case 'last_week':
+      final monday = today.subtract(Duration(days: today.weekday - 1)).subtract(const Duration(days: 7));
+      return _DateRange(monday, monday.add(const Duration(days: 7)));
+
+    case 'this_month':
+      return _DateRange(DateTime(today.year, today.month, 1), DateTime(today.year, today.month + 1, 1));
+
+    case 'next_month':
+      return _DateRange(DateTime(today.year, today.month + 1, 1), DateTime(today.year, today.month + 2, 1));
+
+    case 'last_month':
+      return _DateRange(DateTime(today.year, today.month - 1, 1), DateTime(today.year, today.month, 1));
+
+    case 'specific_date':
+      if (specificDateRaw != null) {
+        try {
+          final d = DateTime.parse(specificDateRaw);
+          final day = DateTime(d.year, d.month, d.day);
+          return _DateRange(day, day.add(const Duration(days: 1)));
+        } catch (_) {
+          // rơi xuống fallback "today" bên dưới nếu parse lỗi
+        }
+      }
+      return _DateRange(today, today.add(const Duration(days: 1)));
+
+    case 'today':
+    default:
+      return _DateRange(today, today.add(const Duration(days: 1)));
   }
 }

@@ -16,16 +16,26 @@ Phân tích câu người dùng nhập, trả về CHÍNH XÁC 1 JSON object the
   "intent": "createTask | updateTask | deleteTask | completeTask | queryTasks | performanceReport | chitchat | unknown",
   "confidence": 0.0 đến 1.0,
   "message": "câu trả lời tự nhiên bằng tiếng Việt cho người dùng",
-  "entities": {
+ "entities": {
     "title": "tên task nếu có, null nếu không",
     "dueDate": "ISO8601 datetime nếu có, null nếu không",
     "priority": "low|medium|high, null nếu không đề cập",
-    "taskIdHint": "từ khóa để tìm task nếu là update/delete/complete, null nếu không"
+    "taskIdHint": "từ khóa để tìm task nếu là update/delete/complete, null nếu không",
+    "queryScope": "CHỈ áp dụng khi intent là queryTasks. Giá trị: 'date_range' (có nhắc mốc thời gian cụ thể như hôm nay/ngày mai/tuần này/tháng 9/ngày 15), 'overdue' (hỏi về task bị trễ/quá hạn), hoặc 'all' (hỏi tổng quát không giới hạn thời gian, ví dụ 'tôi có bao nhiêu task tất cả'). Null nếu không phải queryTasks.",
+    "timeExpression": "CHỈ khi queryScope='date_range'. Chọn ĐÚNG 1 trong các giá trị: 'today', 'tomorrow', 'yesterday', 'this_week', 'next_week', 'last_week', 'this_month', 'next_month', 'last_month', 'specific_date'. KHÔNG tự tính ngày giờ ISO, chỉ chọn nhãn phù hợp nhất với ý người dùng.",
+    "specificDate": "CHỈ khi timeExpression='specific_date' (khi người dùng nói ngày cụ thể như 'ngày 15 tháng 8'). Trả về dạng YYYY-MM-DD, KHÔNG kèm giờ. Ví dụ 'ngày 15 tháng 8' => '2026-08-15'. Null nếu không áp dụng."
   },
   "requires_confirmation": true nếu là deleteTask, false cho các trường hợp khác
 }
-
+Ví dụ:
+- "task ngày mai của tôi" → queryScope: "date_range", timeExpression: "tomorrow".
+- "tuần sau tôi có gì" → queryScope: "date_range", timeExpression: "next_week".
+- "tháng 9 tôi lên lịch những gì" → queryScope: "date_range", timeExpression: "next_month" (nếu tháng hiện tại là 8) — LUÔN chọn nhãn tương đối theo tháng hiện tại, KHÔNG dùng "specific_date" cho cả tháng.
+- "ngày 15 tháng 8 tôi có việc gì" → queryScope: "date_range", timeExpression: "specific_date", specificDate: "2026-08-15".
+- "task nào tôi đang trễ hạn" → queryScope: "overdue".
+- "tổng cộng tôi có bao nhiêu task" → queryScope: "all".
 Nếu câu người dùng không rõ ràng, mơ hồ, hoặc không liên quan đến quản lý task, trả về intent "unknown" và viết "message" hỏi lại người dùng để làm rõ ý.
+
 
 Ngày giờ hiện tại: ${DateTime.now().toIso8601String()}
 ''';
