@@ -102,7 +102,53 @@ class RouteMessage {
     }
 
     final result = await classifyIntent(userMessage, contextHint: _context.contextHint);
-switch (result.intent) {
+
+    // Câu chứa nhiều hành động (vd "tạo task A và đổi task B") -> xử lý tuần tự
+    if (result.actions != null && result.actions!.length > 1) {
+      return _handleMultipleActions(result.actions!, userMessage);
+    }
+
+    return _handleSingleIntent(result, userMessage);
+  }
+
+  /// true nếu response này cần người dùng phản hồi thêm (xác nhận xóa, chọn 1
+  /// trong nhiều task trùng tên, hoặc thiếu thông tin) -> phải dừng chuỗi multi-action
+  /// tại đây, không tự chạy tiếp các hành động sau.
+  bool _needsUserInput(ChatResponse r) =>
+      r.requiresConfirmation ||
+      (r.selectionOptions?.isNotEmpty ?? false) ||
+      (r.quickReplies?.isNotEmpty ?? false);
+
+  Future<ChatResponse> _handleMultipleActions(List<IntentResult> actions, String userMessage) async {
+    final messages = <String>[];
+    final combinedTasks = <Task>[];
+
+    for (final action in actions) {
+      final response = await _handleSingleIntent(action, userMessage);
+      messages.add(response.message);
+      if (response.task != null) combinedTasks.add(response.task!);
+      if (response.taskList != null) combinedTasks.addAll(response.taskList!);
+
+      if (_needsUserInput(response)) {
+        return ChatResponse(
+          message: messages.join('\n'),
+          requiresConfirmation: response.requiresConfirmation,
+          pendingAction: response.pendingAction,
+          selectionOptions: response.selectionOptions,
+          quickReplies: response.quickReplies,
+          taskList: combinedTasks.isNotEmpty ? combinedTasks : null,
+        );
+      }
+    }
+
+    return ChatResponse(
+      message: messages.join('\n'),
+      taskList: combinedTasks.isNotEmpty ? combinedTasks : null,
+    );
+  }
+
+  Future<ChatResponse> _handleSingleIntent(IntentResult result, String userMessage) async {
+    switch (result.intent) {
 
       case IntentType.createTask:
         return _handleCreateTask(result);
@@ -125,7 +171,6 @@ switch (result.intent) {
       default:
         return ChatResponse(message: result.message);
     }
-    
   }
 
   Future<ChatResponse?> _tryResolvePendingClarification(String userMessage) async {
@@ -543,6 +588,10 @@ Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
     final startOfDay = DateTime(now.year, now.month, now.day);
 
     switch (scope) {
+      case 'all':
+        final allTasksForBatch = await taskRepository.watchTasks().first;
+        return allTasksForBatch.where((t) => t.status != TaskStatus.completed).toList();
+
       case 'this_week':
         final endOfWeek = startOfDay.add(const Duration(days: 7));
         final tasks = await taskRepository.queryTasksByDateRange(startOfDay, endOfWeek);

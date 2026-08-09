@@ -12,6 +12,7 @@ import 'package:todolist_app/features/speech/data/datasources/speech_to_text_dat
 import 'package:todolist_app/features/tasks/domain/usecases/update_task.dart';
 import '../features/tasks/domain/usecases/create_recurring_tasks.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/generate_morning_summary.dart';
+import 'package:todolist_app/features/ai_engine/domain/usecases/check_urgent_tasks_reminder.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/route_message.dart';
 import 'package:todolist_app/features/analytics/domain/usecases/generate_performance_report.dart';
 import 'package:todolist_app/features/analytics/data/datasources/analytics_aggregation_datasource.dart';
@@ -95,6 +96,9 @@ List<SingleChildWidget> get appProviders {
 Provider<GenerateMorningSummary>(
   create: (context) => GenerateMorningSummary(context.read<TaskRepository>()),
 ),
+Provider<CheckUrgentTasksReminder>(
+  create: (context) => CheckUrgentTasksReminder(context.read<TaskRepository>()),
+),
 
     ChangeNotifierProvider<ChatProvider>(
       create: (context) => ChatProvider(
@@ -102,6 +106,7 @@ Provider<GenerateMorningSummary>(
         context.read<SpeakResponse>(),
         context.read<GenerateMorningSummary>(),
         context.read<DailyGreetingService>(),
+        context.read<CheckUrgentTasksReminder>(),
       ),
     ),
     ChangeNotifierProvider<ThemeProvider>(

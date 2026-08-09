@@ -4,6 +4,7 @@ import '../../../ai_engine/domain/entities/chat_response.dart';
 import '../../../ai_engine/domain/usecases/route_message.dart';
 import '../../../speech/domain/usecases/speak_response.dart';
 import '../../../ai_engine/domain/usecases/generate_morning_summary.dart';
+import '../../../ai_engine/domain/usecases/check_urgent_tasks_reminder.dart';
 import '../../../../core/services/daily_greeting_service.dart';
 enum MessageSender { user, ai }
 
@@ -20,9 +21,16 @@ class ChatProvider extends ChangeNotifier {
   final SpeakResponse speakResponse;
   final GenerateMorningSummary generateMorningSummary;
   final DailyGreetingService dailyGreetingService;
+  final CheckUrgentTasksReminder checkUrgentTasksReminder;
   bool voiceReplyEnabled = true;
 
-  ChatProvider(this.routeMessage, this.speakResponse, this.generateMorningSummary, this.dailyGreetingService);
+  ChatProvider(
+    this.routeMessage,
+    this.speakResponse,
+    this.generateMorningSummary,
+    this.dailyGreetingService,
+    this.checkUrgentTasksReminder,
+  );
 
   final List<ChatMessage> messages = [];
   bool isLoading = false;
@@ -45,6 +53,21 @@ class ChatProvider extends ChangeNotifier {
       speakResponse(response.message);
     }
   }
+
+  /// Nhắc task quá hạn + sắp đến hạn — chạy MỖI LẦN mở app, không giới hạn
+  /// 1 lần/ngày như lời chào buổi sáng. Không hiện gì nếu không có gì khẩn.
+  Future<void> checkUrgentReminder() async {
+    final response = await checkUrgentTasksReminder();
+    if (response == null) return;
+
+    messages.add(ChatMessage(sender: MessageSender.ai, response: response));
+    notifyListeners();
+
+    if (voiceReplyEnabled) {
+      speakResponse(response.message);
+    }
+  }
+
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 

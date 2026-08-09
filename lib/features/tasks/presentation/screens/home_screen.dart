@@ -22,8 +22,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatProvider>().checkMorningGreeting();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final chat = context.read<ChatProvider>();
+      await chat.checkMorningGreeting();
+      await chat.checkUrgentReminder();
     });
   }
 
