@@ -208,7 +208,7 @@ if (_isRestored) {
           color: scheme.error,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: const Icon(Icons.delete_outline, color: Colors.white),
+        child: Icon(Icons.delete_outline, color: scheme.onError),
       ),
       child: Material(
         color: Colors.transparent,

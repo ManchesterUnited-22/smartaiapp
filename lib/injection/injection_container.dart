@@ -91,10 +91,12 @@ List<SingleChildWidget> get appProviders {
 
     Provider<RouteMessage>(
       create: (context) => RouteMessage(
+
         classifyIntent: context.read<ClassifyIntent>(),
         createTask: context.read<CreateTask>(),
         completeTask: context.read<CompleteTask>(),
         deleteTask: context.read<DeleteTask>(),
+        updateTask: context.read<UpdateTask>(),
         taskRepository: context.read<TaskRepository>(),
         generateReport: context.read<GeneratePerformanceReport>(),
         createRecurringTasks: context.read<CreateRecurringTasks>(),

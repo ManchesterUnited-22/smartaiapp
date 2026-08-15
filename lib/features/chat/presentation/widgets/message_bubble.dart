@@ -60,7 +60,7 @@ class MessageBubble extends StatelessWidget {
           Text(
             message.text ?? message.response?.message ?? '',
             style: TextStyle(
-              color: isUser ? Colors.white : scheme.onSurface,
+              color: isUser ? scheme.onPrimary : scheme.onSurface,
               fontSize: 14.5,
               height: 1.4,
             ),
@@ -162,9 +162,13 @@ class MessageBubble extends StatelessWidget {
     required VoidCallback onTap,
     required bool filled,
     Color? color,
+    Color? onColor,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final baseColor = color ?? scheme.primary;
+    // Màu chữ tương phản đúng theo màu nền đang dùng (quan trọng ở Dark Mode,
+    // nơi primary là màu sáng nên chữ cần tối thay vì trắng cứng).
+    final textColor = onColor ?? (color == scheme.error ? scheme.onError : scheme.onPrimary);
 
     return Material(
       color: filled ? baseColor : Colors.transparent,
@@ -183,7 +187,7 @@ class MessageBubble extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: filled ? Colors.white : scheme.onSurface,
+              color: filled ? textColor : scheme.onSurface,
             ),
           ),
         ),

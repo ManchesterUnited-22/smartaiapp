@@ -1,5 +1,6 @@
 // lib/features/task/data/datasources/task_firestore_datasource.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/task_model.dart';
 import '../../domain/entities/task.dart';
 
@@ -44,10 +45,12 @@ class TaskFirestoreDatasource {
       } catch (e) {
         // Không để 1 document lỗi làm sập cả danh sách — bỏ qua document đó
         // và in rõ ID + dữ liệu thô ra console để biết chính xác chỗ nào sai.
-        // ignore: avoid_print
-        print('⚠️ LỖI PARSE TASK [${d.id}]: $e');
-        // ignore: avoid_print
-        print('   Dữ liệu thô: ${d.data()}');
+        if (kDebugMode) {
+          // ignore: avoid_print
+          print('⚠️ LỖI PARSE TASK [${d.id}]: $e');
+          // ignore: avoid_print
+          print('   Dữ liệu thô: ${d.data()}');
+        }
       }
     }
     return tasks;
@@ -68,9 +71,11 @@ class TaskFirestoreDatasource {
     for (final d in snap.docs){
       try {
         tasks.add(TaskModel.fromFirestore(d));
-      } catch (e) {
-        print('⚠️ LỖI PARSE TASK [${d.id}]: $e');
-        
+      } catch (e, stackTrace) {
+        if (kDebugMode) {
+          print('⚠️ LỖI PARSE TASK [${d.id}]: $e');
+          print(stackTrace);
+        }
       }
     }
     return tasks;

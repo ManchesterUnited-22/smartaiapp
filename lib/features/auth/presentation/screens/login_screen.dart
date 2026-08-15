@@ -359,16 +359,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                       onTap: _isLoading ? null : _submit,
                                       child: Center(
                                         child: _isLoading
-                                            ? const SizedBox(
+                                            ? SizedBox(
                                                 height: 20, width: 20,
                                                 child: CircularProgressIndicator(
-                                                  strokeWidth: 2, color: Colors.white,
+                                                  strokeWidth: 2, color: scheme.onPrimary,
                                                 ),
                                               )
                                             : Text(
                                                 _isRegisterMode ? 'Đăng ký' : 'Đăng nhập',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
+                                                style: TextStyle(
+                                                  color: scheme.onPrimary,
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 15,
                                                 ),

@@ -6,6 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:todolist_app/core/providers/theme_provider.dart';
 import 'package:todolist_app/core/services/notification_service.dart';
 import 'package:todolist_app/core/theme/app_theme.dart';
+import 'package:todolist_app/features/ai_engine/domain/usecases/route_message.dart';
+import 'package:todolist_app/features/chat/presentation/providers/chat_provider.dart';
 
 import 'package:todolist_app/features/tasks/presentation/screens/home_screen.dart';
 import 'firebase_options.dart';
@@ -51,6 +53,8 @@ class MyApp extends StatelessWidget {
           if (snapshot.hasData) {
             return const HomeScreen();
           }
+          context.read<ChatProvider>().reset();
+          context.read<RouteMessage>().reset();
           return const LoginScreen();
         },
       ),

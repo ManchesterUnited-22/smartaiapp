@@ -20,6 +20,7 @@ class ChatPanel extends StatefulWidget {
 class _ChatPanelState extends State<ChatPanel> {
   ScrollController? _internalController;
   ScrollController get _controller => widget.scrollController ?? (_internalController ??= ScrollController());
+  int _lastMessageCount = 0;
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -43,7 +44,13 @@ class _ChatPanelState extends State<ChatPanel> {
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
       builder: (context, chat, _) {
-        _scrollToBottom();
+        // Chỉ tự cuộn xuống khi có tin nhắn MỚI được thêm vào — không cuộn
+        // vì lý do khác (đổi theme, bật/tắt đọc trả lời...) làm giật khung
+        // chat trong lúc người dùng đang cuộn lên đọc lại tin cũ.
+        if (chat.messages.length != _lastMessageCount) {
+          _lastMessageCount = chat.messages.length;
+          _scrollToBottom();
+        }
         return Column(
           children: [
             Expanded(

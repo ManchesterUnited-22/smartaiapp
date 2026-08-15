@@ -167,4 +167,9 @@ class ChatProvider extends ChangeNotifier {
     );
     notifyListeners();
   }
+  // lib/features/chat/presentation/providers/chat_provider.dart — thêm vào cuối class
+  void reset() {
+    messages.clear();
+    notifyListeners();
+  }
 }

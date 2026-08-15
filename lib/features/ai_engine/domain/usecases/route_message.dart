@@ -1,5 +1,5 @@
 // lib/features/ai_engine/domain/usecases/route_message.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:intl/intl.dart';
 import 'package:todolist_app/core/error/network_exception_handler.dart';
 import 'package:todolist_app/features/ai_engine/domain/entities/conversation_context.dart';
@@ -11,6 +11,7 @@ import '../../../tasks/domain/usecases/create_task.dart';
 import '../../../tasks/domain/usecases/create_recurring_tasks.dart';
 import '../../../tasks/domain/usecases/complete_task.dart';
 import '../../../tasks/domain/usecases/delete_task.dart';
+import '../../../tasks/domain/usecases/update_task.dart';
 import '../../../tasks/domain/repositories/task_repository.dart';
 import '../../../analytics/domain/usecases/generate_performance_report.dart';
 
@@ -56,6 +57,7 @@ class RouteMessage {
   final CreateRecurringTasks createRecurringTasks;
   final CompleteTask completeTask;
   final DeleteTask deleteTask;
+  final UpdateTask updateTask;
   final TaskRepository taskRepository;
   final GeneratePerformanceReport generateReport;
   final ConversationContext _context = ConversationContext();
@@ -73,9 +75,18 @@ class RouteMessage {
     required this.createRecurringTasks,
     required this.completeTask,
     required this.deleteTask,
+    required this.updateTask,
     required this.taskRepository,
     required this.generateReport,
   });
+
+  /// Gọi khi user đăng xuất/đăng nhập tài khoản khác trên cùng thiết bị —
+  /// tránh context hội thoại (task vừa nhắc, câu hỏi đang chờ trả lời) của
+  /// người dùng trước rò sang phiên chat của người dùng sau.
+  void reset() {
+    _context.clear();
+    _pendingClarification = null;
+  }
 
   bool _mentionsContextReference(String text) {
     final normalized = ' ${text.toLowerCase().trim()} ';
@@ -191,20 +202,30 @@ class RouteMessage {
     _pendingClarification = null;
 
     if (pending.type == PendingType.updateField) {
-      final updates = <String, dynamic>{};
+      DateTime? newDueDate;
       if (slot['dueDate'] != null) {
         try {
-          updates['dueDate'] = Timestamp.fromDate(DateTime.parse(slot['dueDate']));
+          newDueDate = DateTime.parse(slot['dueDate']);
         } catch (_) {}
       }
-      if (slot['priority'] != null) {
-        updates['priority'] = slot['priority'];
-      }
+      final newPriority = slot['priority'] != null ? _parsePriority(slot['priority']) : null;
 
-      if (updates.isEmpty) return null;
+      if (newDueDate == null && newPriority == null) return null;
 
       try {
-        await taskRepository.updateTask(pending.taskId!, updates);
+        // Cần task hiện tại để điền các field KHÔNG đổi (UpdateTask cần đủ
+        // title/dueDate/priority, không nhận partial update như Map thô).
+        final currentTask = await taskRepository.getTaskById(pending.taskId!);
+        if (currentTask == null) {
+          return ChatResponse(message: 'Task "${pending.title}" không còn tồn tại nữa.');
+        }
+
+        await updateTask(
+          taskId: pending.taskId!,
+          title: currentTask.title,
+          newDueDate: newDueDate ?? currentTask.dueDate,
+          newPriority: newPriority ?? currentTask.priority,
+        );
         final updatedTask = await taskRepository.getTaskById(pending.taskId!);
         if (updatedTask != null) _context.updateWithTask(updatedTask);
         return ChatResponse(message: 'Đã cập nhật task "${pending.title}":', task: updatedTask);
@@ -363,17 +384,15 @@ class RouteMessage {
         final task = outcome.singleTask!;
         _context.updateWithTask(task);
 
-        final updates = <String, dynamic>{};
+        DateTime? newDueDate;
         if (entities['dueDate'] != null) {
           try {
-            updates['dueDate'] = Timestamp.fromDate(DateTime.parse(entities['dueDate']));
+            newDueDate = DateTime.parse(entities['dueDate']);
           } catch (_) {}
         }
-        if (entities['priority'] != null) {
-          updates['priority'] = entities['priority'];
-        }
+        final newPriority = entities['priority'] != null ? _parsePriority(entities['priority']) : null;
 
-        if (updates.isEmpty) {
+        if (newDueDate == null && newPriority == null) {
           _pendingClarification = PendingClarification(
             type: PendingType.updateField,
             taskId: task.id,
@@ -386,7 +405,12 @@ class RouteMessage {
         }
 
         try {
-          await taskRepository.updateTask(task.id, updates);
+          await updateTask(
+            taskId: task.id,
+            title: task.title,
+            newDueDate: newDueDate ?? task.dueDate,
+            newPriority: newPriority ?? task.priority,
+          );
           final updatedTask = await taskRepository.getTaskById(task.id);
           if (updatedTask != null) _context.updateWithTask(updatedTask);
           return ChatResponse(message: 'Đã cập nhật task "${task.title}":', task: updatedTask);
@@ -460,8 +484,10 @@ Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
     final expr = result.entities?['timeExpression'] as String?;
     final specificDate = result.entities?['specificDate'] as String?;
 
-    // ignore: avoid_print
-    print('🔎 queryTasks entities: ${result.entities}');
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print('🔎 queryTasks entities: ${result.entities}');
+    }
 
     try {
       List<Task> tasks;
@@ -488,12 +514,14 @@ Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
       }
       return ChatResponse(message: 'Bạn có ${tasks.length} task $timeLabel:', taskList: tasks);
     } catch (e, stackTrace) {
-       // ignore: avoid_print
-      print('❌ LỖI TRUY VẤN TASK: $e');
-      // ignore: avoid_print
-      print('❌ Loại lỗi: ${e.runtimeType}');
-      // ignore: avoid_print
-      print(stackTrace);
+      if (kDebugMode) {
+        // ignore: avoid_print
+        print('❌ LỖI TRUY VẤN TASK: $e');
+        // ignore: avoid_print
+        print('❌ Loại lỗi: ${e.runtimeType}');
+        // ignore: avoid_print
+        print(stackTrace);
+      }
       return ChatResponse(message: NetworkExceptionHandler.getFriendlyMessage(e));
     }
   }
@@ -701,17 +729,27 @@ Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
       if (action == 'update_task') {
         final title = pendingAction['title'] as String;
         final taskId = pendingAction['taskId'] as String;
-        final updates = <String, dynamic>{};
+
+        DateTime? newDueDate;
         if (pendingAction['newDueDate'] != null) {
           try {
-            updates['dueDate'] = Timestamp.fromDate(DateTime.parse(pendingAction['newDueDate']));
+            newDueDate = DateTime.parse(pendingAction['newDueDate']);
           } catch (_) {}
         }
-        if (pendingAction['newPriority'] != null) {
-          updates['priority'] = pendingAction['newPriority'];
-        }
-        if (updates.isNotEmpty) {
-          await taskRepository.updateTask(taskId, updates);
+        final newPriority =
+            pendingAction['newPriority'] != null ? _parsePriority(pendingAction['newPriority']) : null;
+
+        if (newDueDate != null || newPriority != null) {
+          final currentTask = await taskRepository.getTaskById(taskId);
+          if (currentTask == null) {
+            return ChatResponse(message: 'Task "$title" không còn tồn tại nữa.');
+          }
+          await updateTask(
+            taskId: taskId,
+            title: currentTask.title,
+            newDueDate: newDueDate ?? currentTask.dueDate,
+            newPriority: newPriority ?? currentTask.priority,
+          );
         }
         final updatedTask = await taskRepository.getTaskById(taskId);
         if (updatedTask != null) _context.updateWithTask(updatedTask);

@@ -5,9 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../../../core/config/app_config.dart';
 
 class GeminiIntentDatasource {
-  static const _endpoint =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-
+  static String get _endpoint => AppConfig.geminiEndpoint;
   final _systemPrompt = '''
 Bạn là bộ phân loại ý định (intent classifier) cho app quản lý công việc.
 Phân tích câu người dùng nhập, trả về CHÍNH XÁC 1 JSON object theo schema sau, KHÔNG thêm text hay markdown nào khác:
@@ -153,6 +151,7 @@ Trả về CHÍNH XÁC JSON theo schema sau, không thêm markdown hay giải th
       return parsed as Map<String, dynamic>;
     } on TimeoutException {
       if (retriesLeft > 0) {
+         await Future.delayed(const Duration(milliseconds: 800));
         return _callWithRetry(userMessage, contextHint: contextHint, retriesLeft: retriesLeft - 1);
       }
       throw GeminiException('timeout', 'Kết nối quá lâu, vui lòng thử lại.');
