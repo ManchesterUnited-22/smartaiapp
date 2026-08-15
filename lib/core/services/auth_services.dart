@@ -13,43 +13,64 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   /// Đăng ký: email + username + password
+  /// Đăng ký: email + username + password
   Future<void> signUpWithEmail({
     required String email,
     required String username,
     required String password,
   }) async {
     final normalizedUsername = username.trim().toLowerCase();
+    final trimmedEmail = email.trim();
+    final usernameRef = _firestore.collection('usernames').doc(normalizedUsername);
 
-    // Kiểm tra username đã tồn tại chưa
-    final existing = await _firestore.collection('usernames').doc(normalizedUsername).get();
-    if (existing.exists) {
-      throw Exception('username-already-taken');
+    // Bước 1: "giữ chỗ" username bằng transaction — đảm bảo không 2 người
+    // cùng đăng ký trùng username dù bấm gần như đồng thời (khắc phục race condition).
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(usernameRef);
+      if (snapshot.exists) {
+        throw Exception('username-already-taken');
+      }
+      tx.set(usernameRef, {
+        'uid': '', // cập nhật uid thật ngay sau khi tạo tài khoản Auth thành công
+        'email': trimmedEmail,
+        'reservedAt': Timestamp.now(),
+      });
+    });
+
+    String? createdUid;
+    try {
+      // Bước 2: tạo tài khoản Firebase Auth
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: trimmedEmail,
+        password: password,
+      );
+      createdUid = credential.user!.uid;
+
+      // Bước 3: hoàn tất mapping username -> uid thật + tạo profile
+      await usernameRef.set({'uid': createdUid, 'email': trimmedEmail});
+      await _firestore.collection('users').doc(createdUid).set({
+        'email': trimmedEmail,
+        'username': normalizedUsername,
+        'displayName': normalizedUsername,
+        'createdAt': Timestamp.now(),
+      });
+
+      await _auth.signOut();
+    } catch (e) {
+      // Rollback: có lỗi ở bất kỳ bước nào sau khi đã giữ chỗ username →
+      // giải phóng username, và nếu tài khoản Auth đã lỡ tạo thì xoá luôn,
+      // tránh để lại tài khoản "mồ côi" không đăng nhập được.
+      await usernameRef.delete().catchError((_) => usernameRef);
+      if (createdUid != null) {
+        try {
+          await _auth.currentUser?.delete();
+        } catch (_) {}
+      }
+      rethrow;
     }
-
-    // Tạo tài khoản Firebase Auth
-    final credential = await _auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-
-    final uid = credential.user!.uid;
-
-    // Lưu mapping username -> email/uid (để login bằng username sau này)
-    await _firestore.collection('usernames').doc(normalizedUsername).set({
-      'uid': uid,
-      'email': email.trim(),
-    });
-
-    // Lưu profile user
-    await _firestore.collection('users').doc(uid).set({
-      'email': email.trim(),
-      'username': normalizedUsername,
-      'displayName': normalizedUsername,
-      'createdAt': Timestamp.now(),
-    });
-
-    await _auth.signOut();
   }
+    // Kiểm tra username đã tồn tại chưa
+ 
 
   /// Đăng nhập: chỉ cần username + password
   Future<UserCredential> signInWithUsername({
@@ -93,7 +114,17 @@ class AuthService {
 
     return result;
   }
+ Future<void> sendPasswordResetByUsername(String username) async {
+    final normalizedUsername = username.trim().toLowerCase();
 
+    final doc = await _firestore.collection('usernames').doc(normalizedUsername).get();
+    if (!doc.exists) {
+      throw Exception('username-not-found');
+    }
+
+    final email = doc.data()!['email'] as String;
+    await _auth.sendPasswordResetEmail(email: email);
+  }
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();

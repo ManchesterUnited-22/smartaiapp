@@ -19,9 +19,45 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isRegisterMode = false;
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  String? _validate() {
+    if (_usernameController.text.trim().isEmpty) {
+      return 'Vui lòng nhập tên đăng nhập.';
+    }
+    if (_passwordController.text.isEmpty) {
+      return 'Vui lòng nhập mật khẩu.';
+    }
+    if (_isRegisterMode) {
+      final email = _emailController.text.trim();
+      if (email.isEmpty || !_emailRegex.hasMatch(email)) {
+        return 'Email không hợp lệ.';
+      }
+      if (_passwordController.text.length < 6) {
+        return 'Mật khẩu phải có ít nhất 6 ký tự.';
+      }
+    }
+    return null;
+  }
+
   Future<void> _submit() async {
+    final validationError = _validate();
+    if (validationError != null) {
+      setState(() => _errorMessage = validationError);
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -33,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await authService.signUpWithEmail(
           email: _emailController.text.trim(),
           username: _usernameController.text.trim(),
-          password: _passwordController.text.trim(),
+          password: _passwordController.text, // KHÔNG trim mật khẩu
         );
 
         setState(() {
@@ -50,13 +86,13 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         await authService.signInWithUsername(
           username: _usernameController.text.trim(),
-          password: _passwordController.text.trim(),
+          password: _passwordController.text, // KHÔNG trim mật khẩu
         );
       }
     } catch (e) {
       setState(() => _errorMessage = _friendlyError(e.toString()));
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -70,8 +106,99 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       setState(() => _errorMessage = 'Đăng nhập Google thất bại: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+ Future<void> _showForgotPasswordDialog() async {
+    final controller = TextEditingController(text: _usernameController.text);
+    String? dialogError;
+    bool isSending = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Quên mật khẩu'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Nhập tên đăng nhập, mình sẽ gửi email đặt lại mật khẩu tới email đã đăng ký.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên đăng nhập',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                  ),
+                  if (dialogError != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      dialogError!,
+                      style: TextStyle(color: Theme.of(dialogContext).colorScheme.error, fontSize: 12.5),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Huỷ'),
+                ),
+                FilledButton(
+                  onPressed: isSending
+                      ? null
+                      : () async {
+                          final username = controller.text.trim();
+                          if (username.isEmpty) {
+                            setDialogState(() => dialogError = 'Vui lòng nhập tên đăng nhập.');
+                            return;
+                          }
+                          setDialogState(() {
+                            isSending = true;
+                            dialogError = null;
+                          });
+                          try {
+                            await context.read<AuthService>().sendPasswordResetByUsername(username);
+                            if (dialogContext.mounted) Navigator.pop(dialogContext);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Đã gửi email đặt lại mật khẩu. Kiểm tra hộp thư nhé!'),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isSending = false;
+                              dialogError = e.toString().contains('username-not-found')
+                                  ? 'Tên đăng nhập không tồn tại.'
+                                  : 'Có lỗi xảy ra, vui lòng thử lại.';
+                            });
+                          }
+                        },
+                  child: isSending
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Gửi'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   String _friendlyError(String raw) {
@@ -81,6 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (raw.contains('weak-password')) return 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
     if (raw.contains('wrong-password')) return 'Sai mật khẩu.';
     if (raw.contains('invalid-email')) return 'Email không hợp lệ.';
+    if (raw.contains('network-request-failed')) return 'Không có kết nối mạng, vui lòng thử lại.';
     return 'Có lỗi xảy ra, vui lòng thử lại.';
   }
 
@@ -92,7 +220,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Nền gradient mesh mềm mại
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -172,13 +299,37 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(height: 14),
                               TextField(
                                 controller: _passwordController,
-                                obscureText: true,
-                                decoration: const InputDecoration(
+                                obscureText: _obscurePassword,
+                                decoration: InputDecoration(
                                   labelText: 'Mật khẩu',
-                                  prefixIcon: Icon(Icons.lock_outline),
+                                  prefixIcon: const Icon(Icons.lock_outline),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
                                 ),
                               ),
-
+                              if (!_isRegisterMode)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _isLoading ? null : _showForgotPasswordDialog,
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      'Quên mật khẩu?',
+                                      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5),
+                                    ),
+                                  ),
+                                ),
                               if (_errorMessage != null) ...[
                                 const SizedBox(height: 12),
                                 Align(
@@ -229,7 +380,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
 
                               TextButton(
-                                onPressed: () => setState(() => _isRegisterMode = !_isRegisterMode),
+                                onPressed: _isLoading
+                                    ? null
+                                    : () => setState(() {
+                                          _isRegisterMode = !_isRegisterMode;
+                                          _errorMessage = null;
+                                        }),
                                 child: Text(
                                   _isRegisterMode ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký',
                                   style: TextStyle(color: scheme.primary, fontSize: 13),
@@ -257,7 +413,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                     side: BorderSide(color: scheme.outline),
                                   ),
                                   onPressed: _isLoading ? null : _submitGoogleAuth,
-                                  icon: const Icon(Icons.g_mobiledata, size: 26),
+                                  icon: Text(
+                                    'G',
+                                    style: GoogleFonts.roboto(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF4285F4),
+                                    ),
+                                  ),
                                   label: const Text('Đăng nhập với Google'),
                                 ),
                               ),

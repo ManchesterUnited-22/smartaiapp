@@ -12,8 +12,9 @@ class ChatMessage {
   final String? text;
   final MessageSender sender;
   final ChatResponse? response;
+  final bool isReportSkeleton;
 
-  ChatMessage({this.text, required this.sender, this.response});
+  ChatMessage({this.text, required this.sender, this.response, this.isReportSkeleton = false});
 }
 
 class ChatProvider extends ChangeNotifier {
@@ -67,22 +68,50 @@ class ChatProvider extends ChangeNotifier {
       speakResponse(response.message);
     }
   }
+  
+
+// Heuristic CHỈ để quyết định UI hiện skeleton sớm — không ảnh hưởng tới
+  // việc phân loại ý định thật sự (vẫn do routeMessage/Gemini quyết định).
+  static const _reportHintKeywords = [
+    'hiệu suất', 'đánh giá', 'phân tích', 'thống kê', 'năng suất',
+    'biểu đồ', 'báo cáo', 'tổng kết', 'review', 'nhìn lại', 'kết quả làm việc',
+  ];
+
+  bool _looksLikeReportRequest(String text) {
+    final normalized = text.toLowerCase();
+    return _reportHintKeywords.any((k) => normalized.contains(k));
+  }
 
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
     messages.add(ChatMessage(text: text, sender: MessageSender.user));
+
+    final showSkeleton = _looksLikeReportRequest(text);
+    ChatMessage? skeletonMessage;
+    if (showSkeleton) {
+      skeletonMessage = ChatMessage(sender: MessageSender.ai, isReportSkeleton: true);
+      messages.add(skeletonMessage);
+    }
+
     isLoading = true;
     notifyListeners();
 
     try {
       final response = await routeMessage(text);
+
+      if (skeletonMessage != null) {
+        messages.remove(skeletonMessage);
+      }
       messages.add(ChatMessage(sender: MessageSender.ai, response: response));
 
       if (voiceReplyEnabled) {
         speakResponse(response.message);
       }
     } catch (e) {
+      if (skeletonMessage != null) {
+        messages.remove(skeletonMessage);
+      }
       final errorMsg = 'Có lỗi xảy ra: $e';
       messages.add(ChatMessage(
         sender: MessageSender.ai,

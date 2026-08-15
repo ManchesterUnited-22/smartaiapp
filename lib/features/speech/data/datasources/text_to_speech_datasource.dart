@@ -15,9 +15,14 @@ class TextToSpeechDatasource {
   }
 
   Future<void> speak(String text) async {
-    await _initialize();
-    await _tts.stop(); // dừng câu đang đọc dở (nếu có) trước khi đọc câu mới
-    await _tts.speak(text);
+     try {
+      await _initialize();
+      await _tts.stop(); // dừng câu đang đọc dở (nếu có) trước khi đọc câu mới
+      await _tts.speak(text);
+    } catch (_) {
+      // Nuốt lỗi TTS có chủ đích — đọc to chỉ là tính năng phụ,
+      // lỗi ở đây không được phép làm gián đoạn luồng chat chính.
+    }
   }
 
   Future<void> stop() async {

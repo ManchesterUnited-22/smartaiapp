@@ -8,7 +8,10 @@ import '../../../tasks/domain/entities/task.dart';
 import '../../../tasks/domain/usecases/complete_task.dart';
 import '../../../tasks/domain/usecases/delete_task.dart';
 import '../../../tasks/domain/repositories/task_repository.dart';
-
+import '../../../../core/utils/task_priority_style.dart';
+import '../../../tasks/domain/usecases/create_task.dart';
+import '../../../tasks/domain/usecases/uncomplete_task.dart';
+import 'package:flutter/services.dart';
 class TaskCardWidget extends StatefulWidget {
   final Task task;
   const TaskCardWidget({super.key, required this.task});
@@ -22,7 +25,9 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
   late TaskPriority _priority;
   late DateTime _dueDate;
   bool _isDeleted = false;
+  bool _isRestored = false;
   bool _isBusy = false;
+  bool get _isOverdue => !_isCompleted && _dueDate.isBefore(DateTime.now());
 
   @override
   void initState() {
@@ -31,32 +36,11 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
     _priority = widget.task.priority;
     _dueDate = widget.task.dueDate;
   }
-
-  Color _priorityColor(BuildContext context) {
-    switch (_priority) {
-      case TaskPriority.high:
-        return Colors.red;
-      case TaskPriority.medium:
-        return Colors.orange;
-      case TaskPriority.low:
-        return Colors.green;
-    }
-  }
-
-  String _priorityLabel(TaskPriority p) {
-    switch (p) {
-      case TaskPriority.high:
-        return 'Cao';
-      case TaskPriority.medium:
-        return 'Trung bình';
-      case TaskPriority.low:
-        return 'Thấp';
-    }
-  }
-
-  Future<void> _toggleComplete() async {
+Future<void> _toggleComplete() async {
     if (_isBusy) return;
     final newValue = !_isCompleted;
+
+    HapticFeedback.lightImpact();
     setState(() {
       _isCompleted = newValue;
       _isBusy = true;
@@ -66,10 +50,7 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
       if (newValue) {
         await context.read<CompleteTask>()(widget.task.id);
       } else {
-        await context.read<TaskRepository>().updateTask(widget.task.id, {
-          'status': 'pending',
-          'completedAt': null,
-        });
+        await context.read<UncompleteTask>()(widget.task.id);
       }
     } catch (_) {
       if (mounted) {
@@ -82,6 +63,8 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
       if (mounted) setState(() => _isBusy = false);
     }
   }
+
+ 
 
   Future<bool> _confirmDelete() async {
     final scheme = Theme.of(context).colorScheme;
@@ -103,13 +86,47 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
   }
 
   Future<void> _handleDelete() async {
+    final original = widget.task;
     try {
       await context.read<DeleteTask>()(widget.task.id);
       if (mounted) setState(() => _isDeleted = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text( 'Đã xóa task '),
+          duration: const Duration(seconds:4),
+          action: SnackBarAction(
+            label:'Hoàn tác',
+            onPressed:() => _undoDelete(original),
+          )
+        )
+      );
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Không thể xóa, thử lại nhé.')),
+        );
+      }
+    }
+  }
+   Future<void> _undoDelete(Task original) async {
+    try {
+      await context.read<CreateTask>()(
+        title: original.title,
+        description: original.description,
+        dueDate: original.dueDate,
+        priority: original.priority,
+        tags: original.tags,
+        source: original.source,
+      );
+      if (!mounted) return;
+      setState(() => _isRestored = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã khôi phục task ✅')),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể khôi phục, thử tạo lại task nhé.')),
         );
       }
     }
@@ -161,7 +178,23 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
     if (_isDeleted) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
-
+if (_isRestored) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle, size: 16, color: Color(0xFF16A34A)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '"${widget.task.title}" đã được khôi phục thành task mới.',
+                style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Dismissible(
       key: ValueKey('task_${widget.task.id}'),
       direction: DismissDirection.endToStart,
@@ -186,18 +219,31 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
             margin: const EdgeInsets.symmetric(vertical: 4),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: scheme.surface,
+              color: _isOverdue ? const Color(0xFFDC2626).withOpacity(0.05) : scheme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: scheme.outline.withOpacity(0.4)),
+              border: Border.all(
+                 color: _isOverdue ? const Color(0xFFDC2626).withOpacity(0.5) : scheme.outline.withOpacity(0.4),
+                width: _isOverdue ? 1.2 : 1,
+                ),
             ),
             child: Row(
               children: [
-                GestureDetector(
+               GestureDetector(
                   onTap: _toggleComplete,
-                  child: Icon(
-                    _isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
-                    color: _isCompleted ? scheme.tertiary : _priorityColor(context),
-                    size: 22,
+                  child: AnimatedScale(
+                    scale: _isCompleted ? 1.15 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutBack,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                      child: Icon(
+                        _isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                        key: ValueKey(_isCompleted),
+                        color: _isCompleted ? scheme.tertiary : _priority.color,
+                        size: 22,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -205,43 +251,84 @@ class _TaskCardWidgetState extends State<TaskCardWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.task.title,
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 200),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           decoration: _isCompleted ? TextDecoration.lineThrough : null,
                           color: _isCompleted ? scheme.onSurfaceVariant : scheme.onSurface,
                         ),
+                        child: Text(widget.task.title),
                       ),
                       const SizedBox(height: 3),
                       Row(
                         children: [
-                          Icon(Icons.access_time, size: 12, color: scheme.onSurfaceVariant),
+                          Icon(
+                            Icons.access_time,
+                             size: 12, 
+                             color: _isOverdue ? const Color ( 0xFFDC2626 ):scheme.onSurfaceVariant
+                             ),
                           const SizedBox(width: 3),
                           Text(
                             DateFormat('dd/MM HH:mm').format(_dueDate),
-                            style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+                            style: TextStyle(fontSize: 11.5, color: _isOverdue ? const Color ( 0xFFDC2626 ):scheme.onSurfaceVariant),
                           ),
                           const SizedBox(width: 8),
-                          Container(
+                         Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: _priorityColor(context).withOpacity(0.15),
+                              color: _priority.color.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              _priorityLabel(_priority),
+                              _priority.label,
                               style: TextStyle(
                                 fontSize: 10.5,
-                                color: _priorityColor(context),
+                                color: _priority.color,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
+                          if (_isOverdue)...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal:6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDC2626).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Trễ hạn',
+                                style: TextStyle(fontSize:10.5, color: Color(0xFFDC2626),fontWeight: FontWeight.w600,)
+                              )
+                              )
+                            
+                          ],
                         ],
                       ),
-                    ],
+                      if (widget.task.tags.isNotEmpty)...[
+                        const SizedBox( height: 4),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children:[
+                            for (final tag in widget.task.tags)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: scheme.secondaryContainer.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '#$tag',
+                                style: TextStyle(fontSize: 10, color: scheme.onSecondaryContainer),
+                              ),
+                            )
+                          ]
+                        )
+                      ]
+                  ],
                   ),
                 ),
                 Icon(Icons.chevron_right, size: 18, color: scheme.onSurfaceVariant),
@@ -361,7 +448,7 @@ class _QuickEditSheetState extends State<_QuickEditSheet> {
             spacing: 8,
             children: TaskPriority.values.map((p) {
               return ChoiceChip(
-                label: Text(_priorityLabel(p)),
+                label: Text(p.label),
                 selected: p == _priority,
                 onSelected: (_) => setState(() => _priority = p),
               );
@@ -392,14 +479,5 @@ class _QuickEditSheetState extends State<_QuickEditSheet> {
     );
   }
 
-  String _priorityLabel(TaskPriority p) {
-    switch (p) {
-      case TaskPriority.high:
-        return 'Cao';
-      case TaskPriority.medium:
-        return 'Trung bình';
-      case TaskPriority.low:
-        return 'Thấp';
-    }
-  }
+
 }

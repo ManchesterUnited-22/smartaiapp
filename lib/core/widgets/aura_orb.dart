@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 class AuraOrb extends StatefulWidget {
   final double size;
   final bool animate;
+  final List<Color>? colors;
 
-  const AuraOrb({super.key, this.size = 36, this.animate = false});
+  const AuraOrb({super.key, this.size = 36, this.animate = false, this.colors});
 
   @override
   State<AuraOrb> createState() => _AuraOrbState();
@@ -43,6 +44,7 @@ class _AuraOrbState extends State<AuraOrb> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final gradientColors = widget.colors ?? [scheme.primary, scheme.secondary.withOpacity(0.85)];
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -53,10 +55,7 @@ class _AuraOrbState extends State<AuraOrb> with SingleTickerProviderStateMixin {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: RadialGradient(
-              colors: [
-                scheme.primary,
-                scheme.secondary.withOpacity(0.85),
-              ],
+              colors: gradientColors,
               radius: 0.95,
             ),
             boxShadow: [

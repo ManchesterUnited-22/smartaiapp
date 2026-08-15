@@ -526,26 +526,56 @@ Future<ChatResponse> _handleQueryTasks(IntentResult result) async {
 
   Future<ChatResponse> _handlePerformanceReport(IntentResult result) async {
     try {
-      final now = DateTime.now();
-      final startOfMonth = DateTime(now.year, now.month, 1);
-      final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+      final targetMonth = _resolveReportMonth(result.entities);
+      final startOfMonth = DateTime(targetMonth.year, targetMonth.month, 1);
+      final endOfMonth = DateTime(targetMonth.year, targetMonth.month + 1, 0, 23, 59, 59);
+      final monthLabel = '${targetMonth.month}/${targetMonth.year}';
 
       final tasksInMonth = await taskRepository.queryTasksByDateRange(startOfMonth, endOfMonth);
       if (tasksInMonth.isEmpty) {
         return ChatResponse(
-          message: 'Tháng này bạn chưa có task nào để đánh giá cả. Hãy thử tạo vài task rồi quay lại nhé!',
+          message: 'Tháng $monthLabel bạn chưa có task nào để đánh giá cả. Hãy thử tạo vài task rồi quay lại nhé!',
         );
       }
 
-      final report = await generateReport(now);
+      final report = await generateReport(targetMonth);
       return ChatResponse(
-        message: report.insightText ?? 'Đã phân tích xong hiệu suất tháng này.',
+        message: report.insightText ?? 'Đã phân tích xong hiệu suất tháng $monthLabel.',
         performanceReport: report,
       );
     } catch (e) {
       return ChatResponse(message: NetworkExceptionHandler.getFriendlyMessage(e));
     }
   }
+
+  /// Xác định tháng cần phân tích dựa trên entity AI trích xuất được.
+  /// Mặc định là tháng hiện tại nếu không có thông tin hoặc parse lỗi.
+  DateTime _resolveReportMonth(Map<String, dynamic>? entities) {
+    final now = DateTime.now();
+    final period = entities?['reportPeriod'] as String?;
+
+    switch (period) {
+      case 'last_month':
+        return DateTime(now.year, now.month - 1, 1);
+      case 'specific_month':
+        final raw = entities?['reportMonth'] as String?;
+        if (raw != null) {
+          try {
+            final parts = raw.split('-');
+            final year = int.parse(parts[0]);
+            final month = int.parse(parts[1]);
+            return DateTime(year, month, 1);
+          } catch (_) {
+            // Parse lỗi → rơi về tháng hiện tại bên dưới
+          }
+        }
+        return now;
+      case 'this_month':
+      default:
+        return now;
+    }
+  }
+  
 
   Future<ChatResponse> _handleBatchAction(IntentResult result) async {
     final entities = result.entities ?? {};

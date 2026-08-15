@@ -25,8 +25,11 @@ Phân tích câu người dùng nhập, trả về CHÍNH XÁC 1 JSON object the
     "timeExpression": "CHỈ khi queryScope='date_range'. Chọn ĐÚNG 1 trong các giá trị: 'today', 'tomorrow', 'yesterday', 'this_week', 'next_week', 'last_week', 'this_month', 'next_month', 'last_month', 'specific_date'. KHÔNG tự tính ngày giờ ISO, chỉ chọn nhãn phù hợp nhất với ý người dùng.",
     "specificDate": "CHỈ khi timeExpression='specific_date' (khi người dùng nói ngày cụ thể như 'ngày 15 tháng 8'). Trả về dạng YYYY-MM-DD, KHÔNG kèm giờ. Ví dụ 'ngày 15 tháng 8' => '2026-08-15'. Null nếu không áp dụng."
     "batchScope": "CHỈ khi intent là batchAction. Giá trị: 'today', 'this_week', 'overdue', 'all'. Null nếu không phải batchAction.",   
-    "batchOperation": "CHỈ khi intent là batchAction. Giá trị: 'delete' hoặc 'complete'. Null nếu không phải batchAction."               
+    "batchOperation": "CHỈ khi intent là batchAction. Giá trị: 'delete' hoặc 'complete'. Null nếu không phải batchAction."     
+     "reportPeriod": "CHỈ khi intent là performanceReport. Giá trị: 'this_month' (mặc định nếu người dùng không nói rõ tháng nào), 'last_month', hoặc 'specific_month'. Null nếu không phải performanceReport.",
+    "reportMonth": "CHỈ khi reportPeriod='specific_month'. Định dạng YYYY-MM. Ví dụ 'tháng 8' (khi năm hiện tại) => '2026-08'. Null nếu không áp dụng."
   },
+  
 
 
   "requires_confirmation": true nếu là deleteTask, false cho các trường hợp khác
@@ -44,6 +47,12 @@ Ví dụ:
 - "xóa sạch task tuần này" → intent: "batchAction", batchScope: "this_week", batchOperation: "delete".
 - "xóa hết task chưa xong đi" → intent: "batchAction", batchScope: "all", batchOperation: "delete".
 - "tạo task họp 9h sáng mai, đồng thời đổi task báo cáo sang 3h chiều" → actions: [ {intent:"createTask",...}, {intent:"updateTask",...} ].
+- "xem biểu đồ phân tích hiệu suất" → intent: "performanceReport", reportPeriod: "this_month".
+- "xem biểu đồ tháng 8" → intent: "performanceReport", reportPeriod: "specific_month", reportMonth: "2026-08".
+- "cho tôi xem báo cáo công việc tháng trước" → intent: "performanceReport", reportPeriod: "last_month".
+- "tháng này tôi làm việc thế nào" → intent: "performanceReport", reportPeriod: "this_month".
+- "tổng kết lại tuần/tháng vừa rồi giúp tôi" → intent: "performanceReport", reportPeriod: "this_month".
+- "năng suất của tôi ra sao" → intent: "performanceReport", reportPeriod: "this_month".
 Nếu câu người dùng không rõ ràng, mơ hồ, hoặc không liên quan đến quản lý task, trả về intent "unknown" và viết "message" hỏi lại người dùng để làm rõ ý.
 
 

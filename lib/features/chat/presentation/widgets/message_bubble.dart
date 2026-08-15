@@ -4,6 +4,7 @@ import '../providers/chat_provider.dart';
 import '../../../../core/widgets/aura_orb.dart';
 import 'task_card_widget.dart';
 import 'performance_report_widget.dart';
+import 'report_skeleton_card.dart';
 
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
@@ -22,6 +23,19 @@ class MessageBubble extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final isUser = message.sender == MessageSender.user;
 
+    if (message.isReportSkeleton) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const AuraOrb(size: 26, animate: true),
+            const SizedBox(width: 8),
+            const Flexible(child: ReportSkeletonCard()),
+          ],
+        ),
+      );
+    }
     final bubble = Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

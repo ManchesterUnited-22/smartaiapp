@@ -13,11 +13,32 @@ class ChatInputBar extends StatefulWidget {
 }
 
 class _ChatInputBarState extends State<ChatInputBar> {
-   final _controller = TextEditingController();
+  final _controller = TextEditingController();
   bool _isListening = false;
 
   SpeechToTextDatasource get _speechDatasource =>
       context.read<SpeechToTextDatasource>();
+
+  @override
+  void initState() {
+    super.initState();
+    _speechDatasource.addStatusListener(_onSpeechStatus);
+  }
+
+  @override
+  void dispose() {
+    _speechDatasource.removeStatusListener(_onSpeechStatus);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // Đồng bộ lại UI khi engine TỰ dừng nghe (im lặng quá lâu, hết thời gian...)
+  // — tránh AuraOrb nhấp nháy "đang nghe" dù thực tế đã dừng từ lâu.
+  void _onSpeechStatus(String status) {
+    if ((status == 'done' || status == 'notListening') && mounted && _isListening) {
+      setState(() => _isListening = false);
+    }
+  }
 
   void _submit() {
     final text = _controller.text;
@@ -29,12 +50,25 @@ class _ChatInputBarState extends State<ChatInputBar> {
   Future<void> _toggleListening() async {
     if (_isListening) {
       await _speechDatasource.stopListening();
-      setState(() => _isListening = false);
+      if (mounted) setState(() => _isListening = false);
       return;
     }
+
     setState(() => _isListening = true);
+
     await _speechDatasource.startListening(
-      onResult: (text) => setState(() => _controller.text = text),
+      onResult: (text) {
+        if (!mounted) return;
+        _controller.value = TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: text.length),
+        );
+      },
+      onError: (message) {
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      },
     );
   }
 
@@ -75,11 +109,14 @@ class _ChatInputBarState extends State<ChatInputBar> {
               child: TextField(
                 controller: _controller,
                 decoration: InputDecoration(
-                  hintText: 'Nhắn tin cho AI...',
+                  hintText: _isListening ? 'Đang nghe...' : 'Nhắn tin cho AI...',
                   border: InputBorder.none,
                   filled: false,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+                  hintStyle: TextStyle(
+                    color: _isListening ? scheme.primary : scheme.onSurfaceVariant,
+                    fontStyle: _isListening ? FontStyle.italic : FontStyle.normal,
+                  ),
                 ),
                 onSubmitted: (_) => _submit(),
               ),

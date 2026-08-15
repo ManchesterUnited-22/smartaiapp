@@ -8,7 +8,9 @@ import 'package:todolist_app/core/services/notification_service.dart';
 
 import 'package:todolist_app/features/ai_engine/data/datasources/gemini_intent_datasource.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/classify_intent.dart';
+import 'package:todolist_app/features/chat/presentation/widgets/calculate_streak.dart';
 import 'package:todolist_app/features/speech/data/datasources/speech_to_text_datasource.dart';
+import 'package:todolist_app/features/tasks/domain/usecases/uncomplete_task.dart';
 import 'package:todolist_app/features/tasks/domain/usecases/update_task.dart';
 import '../features/tasks/domain/usecases/create_recurring_tasks.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/generate_morning_summary.dart';
@@ -56,6 +58,9 @@ List<SingleChildWidget> get appProviders {
     Provider<CompleteTask>(
       create: (_) => CompleteTask(taskRepository, notificationService),
     ),
+    Provider<UncompleteTask>(
+      create: (_) => UncompleteTask(taskRepository),
+    ),
     Provider<DeleteTask>(
       create: (_) => DeleteTask(taskRepository, notificationService),
     ),
@@ -78,6 +83,7 @@ List<SingleChildWidget> get appProviders {
         context.read<TaskRepository>(),
         aggregationDatasource,
         insightDatasource,
+        CalculateStreak(context.read<TaskRepository>()),
       ),
     ),
 
