@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/widgets/aura_orb.dart';
+import '../../../../core/widgets/staggered_fade_in.dart';
 
 class EmptyChatState extends StatelessWidget {
   final void Function(String) onSuggestionTap;
@@ -21,40 +22,54 @@ class EmptyChatState extends StatelessWidget {
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const AuraOrb(size: 56, animate: true),
             const SizedBox(height: 20),
-            Text(
-              'Chào bạn 👋',
-              style: GoogleFonts.fraunces(
-                fontSize: 24, fontWeight: FontWeight.w600, color: scheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Mình là trợ lý đồng hành quản lý công việc của bạn.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 26),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: _suggestions.map((s) {
-                return Material(
-                  color: scheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () => onSuggestionTap(s),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      child: Text(s, style: TextStyle(fontSize: 13, color: scheme.onSurface)),
+            SizedBox(
+              width: double.infinity,
+              child: StaggeredFadeIn(
+                stagger: const Duration(milliseconds: 120),
+                children: [
+                  Center(
+                    child: Text(
+                      'Chào bạn 👋',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.fraunces(
+                        fontSize: 24, fontWeight: FontWeight.w600, color: scheme.onSurface,
+                      ),
                     ),
                   ),
-                );
-              }).toList(),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Mình là trợ lý đồng hành quản lý công việc của bạn.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                  const SizedBox(height: 26),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: _suggestions.map((s) {
+                      return Material(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => onSuggestionTap(s),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            child: Text(s, style: TextStyle(fontSize: 13, color: scheme.onSurface)),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

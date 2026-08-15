@@ -57,6 +57,7 @@ class _ChatPanelState extends State<ChatPanel> {
                         message: chat.messages[index],
                         onConfirm: (action) => chat.confirmAction(action),
                         onQuickReply: (text) => chat.sendMessage(text),
+                        onCancel: (message) => chat.cancelPendingAction(message),
                       ),
                     ),
             ),

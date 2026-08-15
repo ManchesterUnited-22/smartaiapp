@@ -10,12 +10,14 @@ class MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final void Function(Map<String, dynamic>) onConfirm;
   final void Function(String) onQuickReply;
+  final void Function(ChatMessage) onCancel;
 
   const MessageBubble({
     super.key,
     required this.message,
     required this.onConfirm,
     required this.onQuickReply,
+    required this.onCancel,
   });
 
   @override
@@ -129,7 +131,7 @@ class MessageBubble extends StatelessWidget {
                     color: scheme.error,
                   ),
                   const SizedBox(width: 8),
-                  _pillButton(context, label: 'Hủy', onTap: () {}, filled: false),
+                  _pillButton(context, label: 'Hủy', onTap: () => onCancel(message), filled: false),
                 ],
               ),
             ),

@@ -44,7 +44,7 @@ class CreateTask {
         reminderTime: reminderTime,
       );
       await notificationService.scheduleOverdueAlert(
-        taskId: task.id,
+        taskId: createdTask.id,
         title: title,
         dueDate: dueDate,
       );

@@ -143,4 +143,28 @@ class ChatProvider extends ChangeNotifier {
     if (!voiceReplyEnabled) speakResponse.stop();
     notifyListeners();
   }
+
+  /// Huỷ 1 hành động đang chờ xác nhận (nút "Hủy" trong MessageBubble).
+  /// Thay message đó bằng bản đã gỡ nút xác nhận/lựa chọn, kèm ghi chú
+  /// "Đã hủy" để người dùng biết chắc là không có gì bị thực thi.
+  void cancelPendingAction(ChatMessage message) {
+    final index = messages.indexOf(message);
+    if (index == -1) return;
+
+    final oldResponse = message.response;
+    if (oldResponse == null) return;
+
+    messages[index] = ChatMessage(
+      sender: message.sender,
+      response: ChatResponse(
+        message: '${oldResponse.message}\n\n_Đã hủy, không có gì thay đổi._',
+        task: oldResponse.task,
+        taskList: oldResponse.taskList,
+        performanceReport: oldResponse.performanceReport,
+        // requiresConfirmation/pendingAction/selectionOptions/quickReplies
+        // mặc định null/false -> gỡ hết các nút hành động khỏi bubble này.
+      ),
+    );
+    notifyListeners();
+  }
 }

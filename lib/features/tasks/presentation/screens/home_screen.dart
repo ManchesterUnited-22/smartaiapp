@@ -29,9 +29,36 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final scheme = Theme.of(context).colorScheme;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Đăng xuất?'),
+        content: const Text('Bạn có chắc muốn đăng xuất khỏi tài khoản này không?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: scheme.error),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Đăng xuất'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await context.read<AuthService>().signOut();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -61,15 +88,32 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Đăng xuất',
             icon: const Icon(Icons.logout_rounded),
-            onPressed: () => context.read<AuthService>().signOut(),
+            onPressed: () => _confirmSignOut(context),
           ),
           const SizedBox(width: 4),
         ],
-        backgroundColor: scheme.surface,
+        // Trong suốt để hoà vào theme (AppBarTheme) thay vì đè màu cứng,
+        // giữ đồng bộ với app_theme.dart.
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: SafeArea(
-        child: ChatPanel(),
+      body: Container(
+        // Gradient nhẹ phía sau AppBar cho cảm giác sinh động, chiều sâu hơn
+        // thay vì nền phẳng một màu.
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              scheme.primaryContainer.withValues(alpha: isDark ? 0.16 : 0.35),
+              scheme.surface.withValues(alpha: 0),
+            ],
+            stops: const [0.0, 0.35],
+          ),
+        ),
+        child: SafeArea(
+          child: ChatPanel(),
+        ),
       ),
     );
   }

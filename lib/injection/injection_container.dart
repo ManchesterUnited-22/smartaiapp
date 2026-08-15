@@ -7,6 +7,7 @@ import 'package:todolist_app/core/services/daily_greeting_service.dart';
 import 'package:todolist_app/core/services/notification_service.dart';
 
 import 'package:todolist_app/features/ai_engine/data/datasources/gemini_intent_datasource.dart';
+import 'package:todolist_app/features/ai_engine/domain/usecases/apply_intent_override.dart';
 import 'package:todolist_app/features/ai_engine/domain/usecases/classify_intent.dart';
 import 'package:todolist_app/features/chat/presentation/widgets/calculate_streak.dart';
 import 'package:todolist_app/features/speech/data/datasources/speech_to_text_datasource.dart';
@@ -37,6 +38,7 @@ List<SingleChildWidget> get appProviders {
   final datasource = TaskFirestoreDatasource(FirebaseFirestore.instance);
   final taskRepository = TaskRepositoryImpl(datasource, authService);
   final geminiDatasource = GeminiIntentDatasource();
+  final applyIntentOverride = ApplyIntentOverride();
   final ttsDatasource = TextToSpeechDatasource();
   final sttDatasource = SpeechToTextDatasource();
   final aggregationDatasource = AnalyticsAggregationDatasource();
@@ -71,7 +73,7 @@ List<SingleChildWidget> get appProviders {
       create: (_) => WatchTodayTask(taskRepository),
     ),
     Provider<ClassifyIntent>(
-      create: (_) => ClassifyIntent(geminiDatasource),
+      create: (_) => ClassifyIntent(geminiDatasource, applyIntentOverride),
     ),
     Provider<CreateRecurringTasks>(
   create: (context) => CreateRecurringTasks(context.read<CreateTask>()),
